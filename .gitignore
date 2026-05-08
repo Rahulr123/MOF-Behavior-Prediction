@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Project data and artifacts (regenerable)
+data/
+outputs/
+*.pt
+*.pkl
+*.npz
+*.h5
+
+# OS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Smoke tests (delete when no longer needed)
+smoke_test.py
+smoke_test.ipynb
