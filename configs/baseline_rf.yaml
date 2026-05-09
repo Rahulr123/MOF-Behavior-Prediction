@@ -1,0 +1,41 @@
+# Random forest baseline config — Phase 2 starter.
+#
+# Used by scripts/train_baseline.py (lands in Phase 2). The intent is to keep
+# all hyperparameters and run options out of the code and in version-
+# controlled YAML, so any run is reproducible by `--config configs/X.yaml`.
+
+run_name: rf_v0_compose_features
+
+data:
+  dataset: qmof
+  data_dir: data
+  target: bandgap          # placeholder — change to a water-relevant target
+                           # (working_capacity, max_uptake, ...) once
+                           # water-isotherm data is integrated.
+  split:
+    type: composition      # one of: composition, cluster, scaffold
+    test_frac: 0.2
+    val_frac: 0.1
+    seed: 42
+
+featurizer:
+  type: compose            # one of: compose, structural, rac, graph
+  scale: standard          # standard | minmax | none
+
+model:
+  type: random_forest
+  n_estimators: 500
+  max_features: sqrt
+  min_samples_leaf: 2
+  n_jobs: -1
+  random_state: 42
+
+eval:
+  metrics: [rmse, mae, r2]
+  per_cluster_breakdown: true
+  uncertainty:
+    method: ensemble       # placeholder for Phase 2.5
+    n_estimators: 10
+
+output:
+  dir: outputs/runs/rf_v0

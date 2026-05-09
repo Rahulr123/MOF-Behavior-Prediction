@@ -12,9 +12,12 @@ env/
 # Jupyter
 .ipynb_checkpoints/
 
-# Project data and artifacts (regenerable)
-data/
-outputs/
+# Project data and artifacts (regenerable). The directories themselves are
+# tracked via .gitkeep so the layout matches CLAUDE.md; their contents are not.
+data/*
+!data/.gitkeep
+outputs/*
+!outputs/.gitkeep
 *.pt
 *.pkl
 *.npz
