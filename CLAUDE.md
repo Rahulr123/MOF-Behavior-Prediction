@@ -33,19 +33,25 @@ The scientific framing, scope, and rationale are in [`README.md`](README.md). Re
 - Logs are JSON or CSV in `outputs/logs/`. No experiment tracker yet — keep it simple.
 - Random seeds: every script that has randomness must accept `--seed` and default to 42.
 
+## Dataset and target
+
+**Dataset: ODAC23** (Open DAC 2023, FAIR Chemistry + Georgia Tech). ~8,400 MOFs with ~176k DFT adsorption-energy calculations for CO₂ and H₂O. We use the H₂O subset only. See `src/mofwater/data/load.py` for the loader and [open-dac.github.io](https://open-dac.github.io/) for the canonical data source.
+
+**Target: minimum H₂O binding energy per MOF** (eV, most-negative value across all sampled configurations). Single scalar per MOF. Chosen because it's a well-defined, unambiguous first target before tackling isotherms or working capacities.
+
 ## Where things live
 
 ```
 src/mofwater/
-  data/load.py        QMOF / CoREMOF download and caching
+  data/load.py        ODAC23 download, caching, per-MOF aggregation
   data/featurize.py   composition + structural featurizers
-  data/splits.py      cluster-based train/val/test splits
+  data/splits.py      MOF-level cluster-based train/val/test splits
   models/baselines.py RF, XGBoost wrappers
   models/gnn.py       GNN model class (Phase 3+)
   eval/metrics.py     RMSE, MAE, R², per-cluster breakdowns
   eval/calibration.py reliability diagrams, ECE, sharpness
 scripts/
-  build_dataset.py    one-shot data download + cache
+  build_dataset.py    one-shot ODAC23 download + per-MOF aggregation
   train_baseline.py   train baseline given a config
   evaluate.py         run a model against the eval suite
 configs/
@@ -59,9 +65,9 @@ tests/
 
 ## Current phase
 
-**Phase 0 — Infrastructure setup.** Repo scaffolded, dependencies installed via uv. Dataset loader skeleton in place but data not yet downloaded.
+**Phase 0 — Infrastructure setup.** Repo scaffolded, dependencies installed via uv. ODAC23 loader skeleton in place; data not yet downloaded.
 
-**Next phase — Phase 1: Data and EDA.** Run the QMOF loader, explore property distributions, identify the water-adsorption-relevant subset, decide on split strategy, write up findings as the first real logbook entry.
+**Next phase — Phase 1: Data and EDA.** Download ODAC23, look at the distribution of per-MOF minimum H₂O binding energies, identify outliers and missingness, decide on MOF-level train/val/test split strategy, write up findings as the first real logbook entry.
 
 When in doubt about scope, *narrow the scope*. This project is high-quality work on a well-defined slice, not a survey of the whole field.
 

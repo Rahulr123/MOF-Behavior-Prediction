@@ -25,4 +25,20 @@ Format for each entry:
 
 ---
 
+## Week 1 — Dataset pivot to ODAC23 (May 2026)
+
+**What I tried.** Started building toward the QMOF database as the project's data source, with band gap (or eventually water-uptake property) as the regression target. Got the loader, build script, tests, and docs all in place pointing at QMOF.
+
+**What I expected.** That QMOF was the natural starting point — it's the most commonly cited MOF property dataset, widely benchmarked, easy to consume as a CSV.
+
+**What happened.** Stopped to ask "why this dataset?" and discovered the Open DAC 2023 (ODAC23) dataset from FAIR Chemistry + Georgia Tech. ODAC23 contains ~176k DFT adsorption energies of CO₂ and H₂O on ~8,400 MOFs — including defective variants, which essentially no other public MOF dataset includes. Critically, it has *actual water binding energies* as labels, while QMOF only has structural and electronic properties; predicting water uptake from QMOF would require either GCMC simulations on top or proxy features. ODAC also comes with pretrained foundation MLIPs (UMA, EquiformerV2, eSEN) trained on this exact data.
+
+**What I learned.** "Use the standard dataset" is the safe pick, not necessarily the right one. For this project's question (water adsorption in MOFs), ODAC23 is a much tighter fit — the target is *in the data* rather than approximated from features. The cost is a heavier data infrastructure (LMDB files, the fairchem package, larger total size), but the scientific framing becomes substantially cleaner.
+
+I also locked in the first regression target: **minimum H₂O binding energy per MOF** — the most-negative binding energy across all sampled H₂O configurations for that MOF. Single scalar per MOF, unambiguous label, useful as a screening primitive (strongly-binding MOFs are candidates for arid-region water harvesting; weakly-binding MOFs are interesting for direct air capture where water competes with CO₂). It's also a more honest first step than jumping straight to isotherm or working-capacity prediction, both of which require thermodynamic post-processing on top of the raw DFT labels.
+
+**Next.** Rewrite the loader for ODAC23, update README/CLAUDE accordingly, write the first EDA notebook to characterize the per-MOF minimum H₂O binding energy distribution (range, outliers, coverage of pristine vs defective MOFs, missingness). Then decide on the MOF-level held-out split before computing any features.
+
+---
+
 <!-- Add new entries above this line. Most recent at top. -->

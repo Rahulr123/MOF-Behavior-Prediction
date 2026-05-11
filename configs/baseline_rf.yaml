@@ -7,20 +7,18 @@
 run_name: rf_v0_compose_features
 
 data:
-  dataset: qmof
+  dataset: odac23
   data_dir: data
-  target: bandgap          # placeholder — change to a water-relevant target
-                           # (working_capacity, max_uptake, ...) once
-                           # water-isotherm data is integrated.
+  target: min_h2o_binding_eV    # per-MOF most-negative H2O adsorption energy
   split:
-    type: composition      # one of: composition, cluster, scaffold
+    type: composition           # one of: composition, cluster, scaffold
     test_frac: 0.2
     val_frac: 0.1
     seed: 42
 
 featurizer:
-  type: compose            # one of: compose, structural, rac, graph
-  scale: standard          # standard | minmax | none
+  type: compose                 # one of: compose, structural, rac, graph
+  scale: standard               # standard | minmax | none
 
 model:
   type: random_forest
@@ -34,7 +32,7 @@ eval:
   metrics: [rmse, mae, r2]
   per_cluster_breakdown: true
   uncertainty:
-    method: ensemble       # placeholder for Phase 2.5
+    method: ensemble            # placeholder for Phase 2.5
     n_estimators: 10
 
 output:
