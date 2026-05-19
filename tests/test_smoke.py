@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 
 import mofwater
-from mofwater.data import load_odac23, min_h2o_binding_per_mof
+from mofwater.data import load_odac25, min_h2o_binding_per_mof
 from mofwater.eval import mae, r2, rmse
 
 
@@ -42,7 +42,7 @@ def test_loaders_are_callable() -> None:
     behavior is tested by actually running scripts/build_dataset.py — we
     don't hit the network in unit tests.
     """
-    assert callable(load_odac23)
+    assert callable(load_odac25)
     assert callable(min_h2o_binding_per_mof)
 
 

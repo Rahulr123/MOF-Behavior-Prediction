@@ -41,4 +41,25 @@ I also locked in the first regression target: **minimum H₂O binding energy per
 
 ---
 
+## Week 2 — ODAC23 → ODAC25 (May 2026)
+
+**What I tried.** Reached for ODAC23 as the dataset, wrote the loader skeleton against it. While exploring the FAIR Chemistry documentation noticed something looked off.
+
+**What I expected.** ODAC23 to still be the current dataset since most of the public documentation and prior ML work references it.
+
+**What happened.** ODAC23 is officially deprecated. The fair-chem documentation explicitly labels its dataset page "Open Direct Air Capture 2023 (ODAC23) [Deprecated]". ODAC25 (August 2025) supersedes it with substantial improvements: ~70M DFT single-point calculations vs ~38M; ~15,000 MOFs vs ~8,400; corrected k-point sampling; re-relaxed bare MOFs to account for adsorbate-induced deformation; added functionalized MOFs (linker + open-metal-site functionalization), synthetically generated frameworks, and high-energy multi-component (CO₂+H₂O, N₂, O₂) adsorption configurations. ODAC25 is distributed as ASE-DB-compatible LMDB files via the `fairchem-data-odac` Python package and on HuggingFace at `facebook/ODAC25`.
+
+**What I learned.** Always check whether the "canonical" dataset for a domain has been superseded — the field moves faster than the published-paper landscape suggests, and using a deprecated dataset is a hireability red flag for anyone serious about MOF ML. Also: the fair-chem ecosystem (UMA, EquiformerV2, eSEN, FAIRChemCalculator) is designed around ODAC25, so any foundation-model work later needs to be on ODAC25 anyway. Migrating now is much cheaper than migrating after building features on the wrong dataset.
+
+The LMDB / ASE-DB file format is unfamiliar territory. Two paths to extract per-configuration adsorption energies into the tabular form my loader expects:
+
+1. `LmdbDataset({"src": "*.aselmdb"})` from fairchem-core — official, but pulls in torch + torch-geometric + ASE + lmdb (heavy install).
+2. Direct download from HuggingFace `facebook/ODAC25` — file structure not yet verified; could be lighter if they publish a tabular summary.
+
+For Phase 1 (computing the per-MOF minimum H₂O binding energy and doing EDA) we don't need the structures yet, only the energies. The loader is designed to accept a normalized CSV at `data/raw/odac25_energies.csv`. The acquisition step is decoupled — I'll iterate on it once I see what `fairchem-data-odac` or the HuggingFace page actually exposes.
+
+**Next.** Pick one acquisition path (probably fairchem-data-odac since it's the official supported route), install it, write a small helper script that iterates the H₂O configurations and dumps them to the expected CSV, then run the EDA notebook.
+
+---
+
 <!-- Add new entries above this line. Most recent at top. -->

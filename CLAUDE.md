@@ -35,7 +35,7 @@ The scientific framing, scope, and rationale are in [`README.md`](README.md). Re
 
 ## Dataset and target
 
-**Dataset: ODAC23** (Open DAC 2023, FAIR Chemistry + Georgia Tech). ~8,400 MOFs with ~176k DFT adsorption-energy calculations for CO₂ and H₂O. We use the H₂O subset only. See `src/mofwater/data/load.py` for the loader and [open-dac.github.io](https://open-dac.github.io/) for the canonical data source.
+**Dataset: ODAC25** (Open DAC 2025, FAIR Chemistry + Georgia Tech). ~70M DFT single-point calculations across ~15,000 MOFs with CO₂, H₂O, N₂, O₂ adsorbates. We use the H₂O subset only. Distributed as ASE-DB-compatible LMDB files via `fairchem-data-odac` and on HuggingFace at `facebook/ODAC25`. Supersedes the deprecated ODAC23. See `src/mofwater/data/load.py` for the loader.
 
 **Target: minimum H₂O binding energy per MOF** (eV, most-negative value across all sampled configurations). Single scalar per MOF. Chosen because it's a well-defined, unambiguous first target before tackling isotherms or working capacities.
 
@@ -43,7 +43,7 @@ The scientific framing, scope, and rationale are in [`README.md`](README.md). Re
 
 ```
 src/mofwater/
-  data/load.py        ODAC23 download, caching, per-MOF aggregation
+  data/load.py        ODAC25 loading (CSV from fairchem-data-odac or HF), per-MOF aggregation
   data/featurize.py   composition + structural featurizers
   data/splits.py      MOF-level cluster-based train/val/test splits
   models/baselines.py RF, XGBoost wrappers
@@ -51,7 +51,7 @@ src/mofwater/
   eval/metrics.py     RMSE, MAE, R², per-cluster breakdowns
   eval/calibration.py reliability diagrams, ECE, sharpness
 scripts/
-  build_dataset.py    one-shot ODAC23 download + per-MOF aggregation
+  build_dataset.py    one-shot ODAC25 load + per-MOF aggregation
   train_baseline.py   train baseline given a config
   evaluate.py         run a model against the eval suite
 configs/
@@ -65,9 +65,9 @@ tests/
 
 ## Current phase
 
-**Phase 0 — Infrastructure setup.** Repo scaffolded, dependencies installed via uv. ODAC23 loader skeleton in place; data not yet downloaded.
+**Phase 0 — Infrastructure setup.** Repo scaffolded, dependencies installed via uv. ODAC25 loader skeleton in place; data not yet downloaded.
 
-**Next phase — Phase 1: Data and EDA.** Download ODAC23, look at the distribution of per-MOF minimum H₂O binding energies, identify outliers and missingness, decide on MOF-level train/val/test split strategy, write up findings as the first real logbook entry.
+**Next phase — Phase 1: Data and EDA.** Obtain ODAC25 H₂O adsorption energies (either via `fairchem-data-odac` + LMDB extraction or via HuggingFace `facebook/ODAC25`), look at the distribution of per-MOF minimum H₂O binding energies, identify outliers and missingness, decide on MOF-level train/val/test split strategy, write up findings as the first real logbook entry.
 
 When in doubt about scope, *narrow the scope*. This project is high-quality work on a well-defined slice, not a survey of the whole field.
 

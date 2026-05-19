@@ -1,68 +1,83 @@
-"""Loaders for the ODAC23 MOF adsorption-energy dataset.
+"""Loaders for the ODAC25 MOF adsorption-energy dataset.
 
-ODAC23 (Open DAC 2023) is a collaboration between Meta FAIR and Georgia Tech.
-It contains ~176k DFT adsorption-energy calculations for CO2 and H2O on
-~8,400 MOFs (pristine and defective). The canonical reference is:
+ODAC25 (Open DAC 2025) is a collaboration between Meta FAIR and Georgia Tech.
+It contains ~70 million DFT single-point calculations for CO2, H2O, N2, and
+O2 adsorption across ~15,000 MOFs (pristine, defective, functionalized, and
+synthetically generated). It supersedes the now-deprecated ODAC23. Canonical
+references:
 
-    Sriram et al., "The Open DAC 2023 Dataset and Challenges for Sorbent
-    Discovery in Direct Air Capture," ACS Cent. Sci. 2024.
-    https://pubs.acs.org/doi/10.1021/acscentsci.3c01629
+    Sriram et al., "The Open DAC 2025 Dataset for Sorbent Discovery in
+    Direct Air Capture," arXiv 2508.03162, 2025.
+    https://arxiv.org/abs/2508.03162
 
-This module loads the *configuration-level* energy table (one row per
-(MOF, adsorbate, configuration)) and aggregates to a per-MOF summary
+    Dataset docs: https://fair-chem.github.io/dac/datasets/odac25.html
+    HuggingFace: https://huggingface.co/facebook/ODAC25
+    Python package: https://github.com/facebookresearch/fairchem/
+                    tree/main/packages/fairchem-data-odac
+
+This module loads the *configuration-level* adsorption-energy table (one row
+per (MOF, adsorbate, configuration)) and aggregates to a per-MOF summary
 (one row per MOF, with the minimum H2O binding energy across configurations).
 
-Data is cached locally under ``data/raw/`` and ``data/processed/``. Both are
-gitignored; the build script regenerates them from scratch.
+Obtaining ODAC25
+----------------
+ODAC25 is distributed as ASE-DB-compatible LMDB files (``*.aselmdb``). This
+loader doesn't read LMDB directly — it expects a normalized CSV at
+``data/raw/odac25_energies.csv`` with columns ``mof_id``, ``adsorbate``,
+``ads_energy`` (plus optional ``defective``, ``config_id``).
 
-Notes on data acquisition
--------------------------
-ODAC23 is hosted by the Open DAC project. The canonical entry point is
-https://open-dac.github.io/ — they distribute the data via S3. The full
-dataset (structures + energies) is hundreds of GB; for this project's first
-phase we only need the adsorption-energy table, which is much smaller.
+Two paths to produce that CSV:
 
-If the URL in ``ODAC23_ENERGIES_URL`` becomes stale (FAIR has been known
-to reorganize their S3 layout when datasets update), the build script will
-report a clear download failure and point you here for manual instructions.
-You can then either:
+1. **Via fairchem-data-odac** (official, heavy install):
 
-1. Update ``ODAC23_ENERGIES_URL`` to a working URL and re-run the build, or
-2. Manually download the energy table and place it at
-   ``data/raw/odac23_energies.csv`` — the loader will pick it up from there.
+   .. code-block:: bash
 
-Expected schema (case-insensitive column names accepted):
-    - ``mof_id``         : str  -- MOF identifier (string token)
-    - ``adsorbate``      : str  -- e.g. "H2O", "CO2", "CO2+H2O"
-    - ``ads_energy``     : float -- adsorption energy in eV (more negative = stronger binding)
-    - ``defective``      : bool (optional) -- pristine vs defective MOF
-    - ``config_id``      : str (optional) -- configuration identifier
+       uv add fairchem-core fairchem-data-odac
+       # then write a small script that iterates an LMDB file:
+
+   .. code-block:: python
+
+       from fairchem.core.datasets import LmdbDataset
+       ds = LmdbDataset({"src": "path/to/odac25_train.aselmdb"})
+       # ds[i] yields ASE Atoms-like objects with energy, forces, adsorbate
+       # info — collect into a DataFrame and write to data/raw/odac25_energies.csv
+
+2. **Via HuggingFace** (potentially lighter, depending on file layout):
+
+   .. code-block:: bash
+
+       uv add huggingface_hub datasets
+
+   Then download from ``facebook/ODAC25`` and convert. The exact files
+   available on the HF page should be inspected manually.
+
+Either way, the resulting CSV must conform to the expected schema below.
+
+Expected CSV schema
+-------------------
+Required columns (case-insensitive; common aliases are normalized):
+    - ``mof_id``    : str   -- MOF identifier
+    - ``adsorbate`` : str   -- e.g. "H2O", "CO2", "CO2+H2O"
+    - ``ads_energy``: float -- adsorption energy in eV (more negative = stronger binding)
+
+Optional columns (forwarded if present):
+    - ``defective`` : bool  -- pristine vs defective MOF
+    - ``config_id`` : str   -- configuration identifier
 """
 
 from __future__ import annotations
 
 import logging
-import shutil
 from pathlib import Path
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
 
 import pandas as pd
-from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
 
-# URL to the ODAC23 adsorption-energy table.
-# This is a placeholder pointing at the public Open DAC project bucket. If it
-# 404s, update it from https://open-dac.github.io/ and re-run the build.
-ODAC23_ENERGIES_URL = (
-    "https://dl.fbaipublicfiles.com/dac/odac23/odac23_adsorption_energies.csv"
-)
-ODAC23_FILENAME = "odac23_energies.csv"
-ODAC23_PROCESSED_FILENAME = "odac23_min_h2o_per_mof.csv"
+ODAC25_FILENAME = "odac25_energies.csv"
+ODAC25_PROCESSED_FILENAME = "odac25_min_h2o_per_mof.csv"
 
-# Canonical column names we use internally. The loader normalizes incoming
-# variants (lower-cased, underscored, common aliases) to these.
+# Canonical column names. Incoming variants are normalized to these.
 COL_MOF = "mof_id"
 COL_ADSORBATE = "adsorbate"
 COL_ENERGY = "ads_energy"
@@ -89,63 +104,49 @@ COLUMN_ALIASES: dict[str, str] = {
 }
 
 
-def load_odac23(
-    data_dir: Path | str = "data",
-    url: str = ODAC23_ENERGIES_URL,
-    force_download: bool = False,
-) -> pd.DataFrame:
-    """Load the ODAC23 configuration-level adsorption-energy table.
+def load_odac25(data_dir: Path | str = "data") -> pd.DataFrame:
+    """Load the ODAC25 configuration-level adsorption-energy table.
 
-    Returns one row per (MOF, adsorbate, configuration). Columns are normalized
-    to ``mof_id``, ``adsorbate``, ``ads_energy`` (and optionally ``defective``,
-    ``config_id``); see module docstring for the full schema.
+    Reads ``{data_dir}/raw/odac25_energies.csv``, normalizes column names,
+    validates the schema, and returns the DataFrame.
 
     Parameters
     ----------
     data_dir
-        Project data directory. The cached CSV lands at
-        ``{data_dir}/raw/odac23_energies.csv``.
-    url
-        URL to fetch the CSV from when no cache is present.
-    force_download
-        If True, re-download even if a cached copy exists.
+        Project data directory. The CSV must already exist at
+        ``{data_dir}/raw/odac25_energies.csv``. See the module docstring
+        for how to produce this file from ODAC25's native LMDB format.
 
     Returns
     -------
     pd.DataFrame
-        Configuration-level energy table.
+        One row per (MOF, adsorbate, configuration).
 
     Raises
     ------
-    RuntimeError
-        If the file cannot be downloaded *and* no manual cache exists.
+    FileNotFoundError
+        If the CSV does not exist. The error message points to the module
+        docstring for instructions on producing it.
+    ValueError
+        If the CSV is missing required columns.
     """
     data_dir = Path(data_dir)
-    raw_dir = data_dir / "raw"
-    raw_dir.mkdir(parents=True, exist_ok=True)
-    cache_path = raw_dir / ODAC23_FILENAME
+    csv_path = data_dir / "raw" / ODAC25_FILENAME
 
-    if not cache_path.exists() or force_download:
-        logger.info("Downloading ODAC23 energies from %s -> %s", url, cache_path)
-        try:
-            _download_with_progress(url, cache_path)
-        except (HTTPError, URLError, TimeoutError) as err:
-            raise RuntimeError(
-                f"Could not download ODAC23 energies from {url}.\n"
-                f"Reason: {err}\n\n"
-                "To fix this:\n"
-                "  1. Check https://open-dac.github.io/ for the current "
-                "download location.\n"
-                "  2. Update ODAC23_ENERGIES_URL in "
-                "src/mofwater/data/load.py, or\n"
-                f"  3. Manually download the CSV and place it at {cache_path}\n"
-                "     (it must contain mof_id, adsorbate, and ads_energy "
-                "columns — see module docstring for the full schema)."
-            ) from err
-    else:
-        logger.info("Loading cached ODAC23 energies from %s", cache_path)
+    if not csv_path.exists():
+        raise FileNotFoundError(
+            f"ODAC25 energies CSV not found at {csv_path}.\n\n"
+            "This loader expects a normalized CSV produced from ODAC25's "
+            "native LMDB format. See the module docstring in "
+            "src/mofwater/data/load.py for two paths to produce it:\n"
+            "  1. Via fairchem-data-odac (official)\n"
+            "  2. Via HuggingFace facebook/ODAC25\n\n"
+            "Required columns: mof_id, adsorbate, ads_energy.\n"
+            "Optional: defective, config_id."
+        )
 
-    df = pd.read_csv(cache_path)
+    logger.info("Loading ODAC25 energies from %s", csv_path)
+    df = pd.read_csv(csv_path)
     df = _normalize_columns(df)
     _validate_schema(df)
     return df
@@ -155,16 +156,16 @@ def min_h2o_binding_per_mof(
     df: pd.DataFrame,
     save_to: Path | str | None = None,
 ) -> pd.DataFrame:
-    """Aggregate the ODAC23 configuration table to per-MOF minimum H2O binding.
+    """Aggregate the configuration table to per-MOF minimum H2O binding.
 
     For each MOF, find the most-negative ``ads_energy`` across all
-    configurations where ``adsorbate`` indicates water (case-insensitive match
-    against "H2O", "h2o", "water").
+    configurations where ``adsorbate`` indicates water (case-insensitive
+    match against "H2O", "h2o", "water").
 
     Parameters
     ----------
     df
-        Configuration-level energy table from :func:`load_odac23`.
+        Configuration-level energy table from :func:`load_odac25`.
     save_to
         Optional path to write the resulting DataFrame as CSV.
 
@@ -173,7 +174,7 @@ def min_h2o_binding_per_mof(
     pd.DataFrame
         One row per MOF, with columns:
             - ``mof_id``
-            - ``min_h2o_binding_eV``: most negative H2O ads_energy
+            - ``min_h2o_binding_eV``: most-negative H2O ads_energy
             - ``n_h2o_configurations``: count of H2O configurations sampled
             - ``defective``: forwarded if present in source
 
@@ -197,7 +198,7 @@ def min_h2o_binding_per_mof(
     )
 
     # Forward the defective flag if present (take 'any' across configs — a
-    # given MOF is either pristine or defective consistently in ODAC23).
+    # given MOF is either pristine or defective consistently in ODAC25).
     if COL_DEFECTIVE in h2o.columns:
         defect_per_mof = group[COL_DEFECTIVE].agg(lambda s: bool(s.any()))
         agg = agg.merge(defect_per_mof, on=COL_MOF, how="left")
@@ -217,7 +218,7 @@ def min_h2o_binding_per_mof(
 
 
 def _normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """Lower-case + alias-normalize column names in place-ish."""
+    """Lower-case + alias-normalize column names."""
     df = df.copy()
     df.columns = [c.strip().lower() for c in df.columns]
     df = df.rename(columns=COLUMN_ALIASES)
@@ -230,34 +231,8 @@ def _validate_schema(df: pd.DataFrame) -> None:
     missing = required - set(df.columns)
     if missing:
         raise ValueError(
-            f"ODAC23 table is missing required columns: {sorted(missing)}.\n"
+            f"ODAC25 table is missing required columns: {sorted(missing)}.\n"
             f"Got columns: {sorted(df.columns)}.\n"
             "Add alias entries to COLUMN_ALIASES in load.py if the source "
             "data uses different names."
         )
-
-
-def _download_with_progress(url: str, dest: Path, chunk_size: int = 8192) -> None:
-    """Stream ``url`` to ``dest`` with a tqdm progress bar.
-
-    Writes to a temporary file and renames on success so partial downloads
-    don't poison the cache.
-    """
-    tmp = dest.with_suffix(dest.suffix + ".tmp")
-    request = Request(url, headers={"User-Agent": "mofwater/0.1"})
-    with urlopen(request, timeout=120) as response:
-        total = int(response.headers.get("Content-Length", 0))
-        with open(tmp, "wb") as fh, tqdm(
-            total=total or None,
-            unit="B",
-            unit_scale=True,
-            unit_divisor=1024,
-            desc=dest.name,
-        ) as pbar:
-            while True:
-                chunk = response.read(chunk_size)
-                if not chunk:
-                    break
-                fh.write(chunk)
-                pbar.update(len(chunk))
-    shutil.move(str(tmp), str(dest))

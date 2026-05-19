@@ -7,7 +7,7 @@
 run_name: rf_v0_compose_features
 
 data:
-  dataset: odac23
+  dataset: odac25
   data_dir: data
   target: min_h2o_binding_eV    # per-MOF most-negative H2O adsorption energy
   split:
